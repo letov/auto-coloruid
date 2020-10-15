@@ -16,6 +16,6 @@ class Browser:
     def quit(self):
         self.__driver.quit()
 
-    def click(self, click_coords):
+    def click(self, click_point):
         action = webdriver.common.action_chains.ActionChains(self.__driver)
-        action.move_to_element_with_offset(self.__canvas, click_coords[0], click_coords[1]).click().perform()
+        action.move_to_element_with_offset(self.__canvas, click_point[0], click_point[1]).click().perform()

@@ -7,7 +7,6 @@ from PIL import Image
 from io import BytesIO
 from sklearn.cluster import KMeans
 
-
 class Robot:
     STATE_START = 0x01, 'START'  # cостояния игрового процесса
     STATE_SELECT_LEVEL = 0x02, 'SELECT_LEVEL'
@@ -18,23 +17,20 @@ class Robot:
     STATE_GAME_RESULT = 0x07, 'GAME_RESULT'
 
     SQUARE_BIG_SYMBOL = 0x01
-    SQUARE_MEDIUM_SYMBOL = 0x02
-    SQUARE_SMALL_SYMBOL = 0x03
-    SQUARE_BIG_ELEMENT = 0x04
+    SQUARE_SMALL_SYMBOL = 0x02
+    SQUARE_BIG_ELEMENT = 0x03
 
     SQUARE_SIZES = {
         SQUARE_BIG_SYMBOL: 9,  # большие символы, выбор уровня
-        SQUARE_MEDIUM_SYMBOL: 9,  # средние симовлы, шаги игры
         SQUARE_SMALL_SYMBOL: 7,  # маленькие символы, очки игры
         SQUARE_BIG_ELEMENT: 12,  # квадраты выбора цвета
     }
 
     MAX_MATCH_SHAPES_BUTTON = 0.1
-    MAX_MATCH_SHAPES_DIGITS = 0.1
+    MAX_MATCH_SHAPES_DIGITS = 0.15
 
     MAX_STATE_TIMEOUT = 30  # максимальный таймаут текущего состояния
-    AFTER_CLICK_TIMEOUT = 0
-    DEFAULT_STATE_TIMEOUT = 10 + AFTER_CLICK_TIMEOUT  # дефолтный таймаут ожидания успешной смены состояния
+    DEFAULT_STATE_TIMEOUT = 10  # дефолтный таймаут ожидания успешной смены состояния
 
     IMAGE_DATA_PATH = "data/"  # файлы кнопок и цифр в игре
 
@@ -128,14 +124,13 @@ class Robot:
     Внешние методы
     """
 
-    def run(self, browser):
-        self.set_screenshot(browser.screenshot())
+    def run(self, screenshot):
+        self.set_screenshot(screenshot)
         if self.state_current != self.state_next:
             if self.state_next_success_condition_check_count == 0:
                 print("check state condition: " + str(self.state_next[1]))
             self.state_next_success_condition_check_count += 1
             if self.state_next_success_condition():
-                self.set_screenshot(browser.screenshot())
                 self.set_state_current()
             elif time.time() - self.state_start_time >= self.state_timeout:
                 print("state failed: " + str(self.state_next[1]))
@@ -144,13 +139,13 @@ class Robot:
                     self.set_state_current()
                 else:
                     self.state_next = self.state_current
+            return False
         else:
             try:
-                click = self.states[self.state_current[0]]()
-                if click is not False:
-                    print("make click (" + str(click[0]) + "," + str(click[1]) + ")")
-                    browser.click(click)
-                    time.sleep(self.AFTER_CLICK_TIMEOUT)
+                click_point = self.states[self.state_current[0]]()
+                if click_point is not False:
+                    print("make click (" + str(click_point[0]) + "," + str(click_point[1]) + ")")
+                return click_point
             except KeyError:
                 self.__del__()
 
@@ -165,8 +160,8 @@ class Robot:
     Сеттеры
     """
 
-    def set_screenshot(self, browser_screenshot):
-        self.screenshot = cv2.cvtColor(numpy.array(Image.open(BytesIO(browser_screenshot))), cv2.COLOR_BGR2RGB)
+    def set_screenshot(self, screenshot):
+        self.screenshot = cv2.cvtColor(numpy.array(Image.open(BytesIO(screenshot))), cv2.COLOR_BGR2RGB)
 
     def set_state_current(self):
         """
@@ -181,8 +176,8 @@ class Robot:
         """
         Установить выбранное состояние игрового процесса
         :param state_next: следующее состояние игрового процесса
-        :param success_condition: условие принятия состояния
-        :param timeout: таймаут принятия состояния
+        :param state_next_success_condition: условие принятия состояния
+        :param state_timeout: таймаут принятия состояния
         """
         if self.state_current == state_next:
             return
@@ -226,7 +221,7 @@ class Robot:
         :return:
         """
         image = self.crop_image_by_rectangle(self.screenshot, numpy.array((self.GAME_STEP_AREA)))
-        game_step = self.scan_digits(image, self.COLOR_RED, self.SQUARE_MEDIUM_SYMBOL)
+        game_step = self.scan_digits(image, self.COLOR_RED, self.SQUARE_BIG_SYMBOL)
         if game_step is False or len(game_step) != 2:
             return False
         self.stat_step_current = game_step[0][0]
@@ -712,10 +707,7 @@ class Robot:
             for digit in range(0, 10):
                 match_shapes[digit] = self.get_match_shapes(dilate_contour, 'digit_' + str(digit))
             min_match_shape = min(match_shapes.items(), key=lambda x: x[1])
-            max_match_shapes_digits = self.MAX_MATCH_SHAPES_DIGITS
-            if square_inx == self.SQUARE_SMALL_SYMBOL or square_inx == self.SQUARE_MEDIUM_SYMBOL:
-                max_match_shapes_digits += 0.05
-            if len(min_match_shape) > 0 and (min_match_shape[1] < max_match_shapes_digits):
+            if len(min_match_shape) > 0 and (min_match_shape[1] < self.MAX_MATCH_SHAPES_DIGITS):
                 digit = min_match_shape[0]
                 #  6/9 2/5 путаются на маленьких изображениях, дополнительно проверяем по краним точкам контрура
                 if digit == 6 or digit == 9:
