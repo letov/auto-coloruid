@@ -61,14 +61,6 @@ class Robot:
         COLOR_WHITE: ((0, 0, 159), (7, 7, 255)),
     }
 
-    COLOR_BGR_RANGE = {  # диапазоны цветов BGR для фильтров [min,max]
-        COLOR_BLUE: ((182, 36, 36), (255, 147, 147)),
-        COLOR_ORANGE: ((0, 56, 154), (2, 97, 255)),
-        COLOR_RED: ((59, 0, 158), (104, 8, 255)),
-        COLOR_GREEN: ((60, 145, 0), (110, 210, 5)),
-        COLOR_YELLOW: ((0, 140, 140), (5, 204, 204)),
-    }
-
     class ColorArea:  # область цвета на игровом поле
         def __init__(self, color_inx, centroid, click_point, contour, contour_area, select_color_weights):
             self.color_inx = color_inx  # индекс цвета
@@ -304,19 +296,6 @@ class Robot:
         select_color_next = (max_index % self.SELECT_COLOR_COUNT) + 1
         self.set_select_color_next(select_color_next)
 
-    def check_click_point_dominant_color(self, click_point, color_inx):
-        """
-        Проверить соответствует ли область клика доминантному цвету
-        :param click_point: точка клика
-        :param color_inx: какой цвет проверяем
-        :return: True / False
-        """
-        pt1 = (click_point[0] - self.CLICK_AREA if click_point[0] - self.CLICK_AREA > 0 else 0,
-               click_point[1] - self.CLICK_AREA if click_point[1] - self.CLICK_AREA > 0 else 0)
-        pt2 = (click_point[0] + self.CLICK_AREA, click_point[1] + self.CLICK_AREA)
-        image = self.crop_image_by_points(self.screenshot, pt1, pt2)
-        return self.get_dominant_colors(image) == color_inx
-
     """ 
     Методы состояния игрового процесса и проверки корректности состояний
     """
@@ -333,8 +312,6 @@ class Robot:
         """
         button_play = self.get_button_of_squares_click(self.screenshot, 'button_play', self.COLOR_BLUE)
         if button_play is False:
-            return False
-        if not self.check_click_point_dominant_color(button_play, self.COLOR_BLUE):
             return False
         self.set_state_next(self.STATE_SELECT_LEVEL, self.state_select_level_condition, self.DEFAULT_STATE_TIMEOUT)
         return button_play
@@ -359,8 +336,6 @@ class Robot:
             print("No levels")
             return False
         click_point = self.add_rectangle_to_click(self.SELECT_LEVEL_AREA, green_digits[0][1])
-        if not self.check_click_point_dominant_color(click_point, self.COLOR_GREEN):
-            return False
         level = green_digits[0][0]
         if level == 1:
             self.set_state_next(self.STATE_TRAINING_SELECT_COLOR, self.state_new_level_condition,
@@ -434,15 +409,11 @@ class Robot:
         """
         button_win = self.get_win_button_click(self.screenshot)
         if button_win is not False:
-            if not self.check_click_point_dominant_color(button_win, self.COLOR_RED):
-                return False
             self.set_state_next(self.STATE_GAME_SELECT_COLOR, self.state_new_level_condition,
                                 self.DEFAULT_STATE_TIMEOUT)
             return button_win
         button_failed = self.get_button_of_squares_click(self.screenshot, 'button_failed', self.COLOR_RED)
         if button_failed is not False:
-            if not self.check_click_point_dominant_color(button_failed, self.COLOR_RED):
-                return False
             self.set_state_next(self.STATE_GAME_SELECT_COLOR, self.state_new_level_condition,
                                 self.DEFAULT_STATE_TIMEOUT)
             return button_failed
@@ -467,8 +438,6 @@ class Robot:
         if len(color_rectangles) != 1:
             return False
         click_point = self.add_rectangle_to_click(self.SELECT_COLOR_AREA, self.get_contour_centroid(color_rectangles[0]))
-        if not self.check_click_point_dominant_color(click_point, self.select_color_next):
-            return False
         self.set_state_next(self.STATE_GAME_SELECT_AREA, self.state_select_area_condition, self.DEFAULT_STATE_TIMEOUT)
         return click_point
 
@@ -499,36 +468,12 @@ class Robot:
         self.stat_step_last = self.stat_step_current
         click_point = self.add_rectangle_to_click(self.GAME_MAIN_AREA,
                                                   self.color_areas[self.color_area_inx_next].click_point)
-        if not self.check_click_point_dominant_color(click_point, self.color_areas[self.color_area_inx_next].color_inx):
-            self.set_state_next(self.STATE_GAME_SELECT_COLOR, lambda: True,
-                                self.DEFAULT_STATE_TIMEOUT)
         self.set_state_next(self.STATE_GAME_RESULT, self.state_game_result_condition, self.DEFAULT_STATE_TIMEOUT)
         return click_point
 
     """ 
     Зрение
     """
-
-    def get_dominant_colors(self, image):
-        """
-        Получаем доминантный цвет изображения
-        :param image: входное изображение
-        :return: color_inx или False
-        """
-        image = image.reshape((image.shape[0] * image.shape[1], 3))
-        clt = KMeans(n_clusters=2)
-        clt.fit(image)
-        for cluster_center in clt.cluster_centers_:
-            cluster_center = numpy.int0(cluster_center)
-            for color_range in self.COLOR_BGR_RANGE.items():
-                color_inx = color_range[0]
-                color_range_min = numpy.array(color_range[1][0])
-                color_range_max = numpy.array(color_range[1][1])
-                if color_range_min[0] <= cluster_center[0] and color_range_max[0] >= cluster_center[0] and \
-                        color_range_min[1] <= cluster_center[1] and color_range_max[1] >= cluster_center[1] and \
-                        color_range_min[2] <= cluster_center[2] and color_range_max[2] >= cluster_center[2]:
-                    return color_inx
-        return False
 
     def get_dilate_contours(self, image, color_inx, distance):
         """
