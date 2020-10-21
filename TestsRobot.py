@@ -18,13 +18,9 @@ class MyTestCase(unittest.TestCase):
         for image_file in os.listdir(IMAGE_DATA_PATH):
             self.images_data[os.path.splitext(image_file)[0]] = cv2.imread(IMAGE_DATA_PATH + image_file)
 
-    def test_get_dominant_colors(self):
-        image = self.images_data['button_win']
-        self.assertEqual(self.robot.get_dominant_colors(image), self.robot.COLOR_RED)
-
     def test_get_dilate_contours_by_square_inx(self):
         for image_inx, image in self.images_data.items():
-            color_inx = self.robot.COLOR_RED if image_inx == 'button_win' else self.robot.COLOR_BI
+            color_inx = self.robot.COLOR_RED if image_inx == 'button_win' else self.robot.COLOR_ALL
             dilate_contours = self.robot.get_dilate_contours_by_square_inx(image, color_inx,
                                                                            self.robot.SQUARE_BIG_SYMBOL)
             self.assertEqual(len(dilate_contours), 1)
@@ -67,14 +63,6 @@ class MyTestCase(unittest.TestCase):
         self.assertIsNot(button_win, False)
 
     def test_scan_digits(self):
-        image = self.tests_data['SELECT_LEVEL']
-        image = self.robot.crop_image_by_rectangle(image, numpy.array(self.robot.SELECT_LEVEL_AREA))
-        green_digits = self.robot.scan_digits(image, self.robot.COLOR_GREEN, self.robot.SQUARE_BIG_SYMBOL)
-        red_digits = self.robot.scan_digits(image, self.robot.COLOR_RED, self.robot.SQUARE_BIG_SYMBOL)
-        digits = green_digits + red_digits
-        self.assertEqual(len(digits), self.robot.SELECT_LEVEL_COUNT)
-        for digit in range(0, len(digits)):
-            self.assertEqual(digit + 1, digits[digit][0])
         image = self.tests_data['STATE_GAME_SELECT_AREA']
         image = self.robot.crop_image_by_points(image, (292, 19), (357, 52))
         red_digits = self.robot.scan_digits(image, self.robot.COLOR_RED, self.robot.SQUARE_SMALL_SYMBOL)
@@ -111,7 +99,6 @@ class MyTestCase(unittest.TestCase):
         self.robot.analysis_color_areas()
         self.assertEqual(self.robot.select_color_next, self.robot.COLOR_GREEN)
         self.assertEqual(self.robot.color_area_inx_next, 0)
-        #self.robot.demo_color_areas(0)
 
 if __name__ == '__main__':
     unittest.main()

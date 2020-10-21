@@ -3,6 +3,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait as wait
 from selenium.webdriver.common.by import By
 
+
 class Browser:
     def __init__(self, game_url):
         self.__driver = webdriver.Firefox()

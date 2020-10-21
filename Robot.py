@@ -5,7 +5,6 @@ import numpy
 import math
 from PIL import Image
 from io import BytesIO
-from sklearn.cluster import KMeans
 
 class Robot:
     STATE_START = 0x01, 'START'  # cостояния игрового процесса
@@ -50,7 +49,7 @@ class Robot:
     COLOR_GREEN = 0x04
     COLOR_YELLOW = 0x05
     COLOR_WHITE = 0x06
-    COLOR_BI = 0x07
+    COLOR_ALL = 0x07
 
     COLOR_HSV_RANGE = {  # диапазоны цветов HSV для фильтров [min,max]
         COLOR_BLUE: ((112, 151, 216), (128, 167, 255)),
@@ -62,12 +61,10 @@ class Robot:
     }
 
     class ColorArea:  # область цвета на игровом поле
-        def __init__(self, color_inx, centroid, click_point, contour, contour_area, select_color_weights):
+        def __init__(self, color_inx, click_point, contour, select_color_weights):
             self.color_inx = color_inx  # индекс цвета
-            self.centroid = centroid  # центроид области
             self.click_point = click_point  # клик поинт области
             self.contour = contour  # контур области
-            self.contour_area = contour_area  # площадь контура области
             self.neighbors = []  # индексы соседей
             self.select_color_weights = select_color_weights  # [COLOR_BLUE...COLOR_YELLOW] веса цветов
 
@@ -107,7 +104,7 @@ class Robot:
         for image_file in os.listdir(self.IMAGE_DATA_PATH):
             image = cv2.imread(self.IMAGE_DATA_PATH + image_file)
             contour_inx = os.path.splitext(image_file)[0]
-            color_inx = self.COLOR_RED if contour_inx == 'button_win' else self.COLOR_BI
+            color_inx = self.COLOR_RED if contour_inx == 'button_win' else self.COLOR_ALL
             dilate_contours = self.get_dilate_contours_by_square_inx(image, color_inx, self.SQUARE_BIG_SYMBOL)
             self.dilate_contours_bi_data[contour_inx] = dilate_contours[0]
         self.set_state_next(self.STATE_START, self.state_start_condition, 500)
@@ -232,15 +229,13 @@ class Robot:
         self.color_areas = []
         self.color_areas_color_count = [0] * self.SELECT_COLOR_COUNT
         image = self.crop_image_by_rectangle(self.screenshot, numpy.array(self.GAME_MAIN_AREA))
-        for color_inx in range(1, 7):
+        for color_inx in range(1, self.SELECT_COLOR_COUNT + 1):
             dilate_contours = self.get_dilate_contours(image, color_inx, 10)
             for dilate_contour in dilate_contours:
                 click_point = tuple(
                     dilate_contour[dilate_contour[:, :, 1].argmin()].flatten() + [0, int(self.CLICK_AREA)])
                 self.color_areas_color_count[color_inx - 1] += 1
-                color_area = self.ColorArea(color_inx, self.get_contour_centroid(dilate_contour), click_point,
-                                            dilate_contour, cv2.contourArea(dilate_contour),
-                                            [0] * self.SELECT_COLOR_COUNT)
+                color_area = self.ColorArea(color_inx, click_point, dilate_contour, [0] * self.SELECT_COLOR_COUNT)
                 self.color_areas.append(color_area)
         blank_image = numpy.zeros_like(image)
         blank_image = cv2.cvtColor(blank_image, cv2.COLOR_BGR2GRAY)
@@ -249,11 +244,6 @@ class Robot:
                 color_area_1 = self.color_areas[color_area_inx_1]
                 color_area_2 = self.color_areas[color_area_inx_2]
                 if color_area_1.color_inx == color_area_2.color_inx:
-                    continue
-                if color_area_1.contour_area > color_area_2.contour_area and \
-                        cv2.pointPolygonTest(color_area_1.contour, color_area_2.centroid, True) > 0:
-                    self.color_areas[color_area_inx_1].neighbors.append(color_area_inx_2)
-                    self.color_areas[color_area_inx_2].neighbors.append(color_area_inx_1)
                     continue
                 common_image = cv2.drawContours(blank_image.copy(), [color_area_1.contour, color_area_2.contour],
                                                 -1, (255, 255, 255), cv2.FILLED)
@@ -271,7 +261,7 @@ class Robot:
             ячейка - вес цвета
         Распределение весов:
         соседи области одинаковых цветов, +1 к ячейке данного цвета
-        соседи области одинаковых цветов и это все цвета на уровне +5 к ячейке данного цвета
+        соседи области одинаковых цветов и это все цвета на уровне +10 к ячейке данного цвета
         область с уникальным цветом на карте, все ячейки строки +10
         """
         select_color_weights = []
@@ -284,7 +274,7 @@ class Robot:
             for color_inx in range(0, len(select_color_weight)):
                 color_count = select_color_weight[color_inx]
                 if color_count != 0 and self.color_areas_color_count[color_inx] == color_count:
-                    select_color_weight[color_inx] += 5
+                    select_color_weight[color_inx] += 10
             if self.color_areas_color_count[color_area.color_inx - 1] == 1:
                 select_color_weight = [x + 10 for x in select_color_weight]
             color_area.set_select_color_weights(select_color_weight)
@@ -504,13 +494,13 @@ class Robot:
 
     def get_color_thresh(self, image, color_inx):
         """
-        Цветофильтр диапазона COLOR_HSV_RANGE[color_inx] или бимодальный фильтр
+        Возвращает пороговое изображение по color_inx
         :param image: входное изображение
-        :param color_inx: индекс COLOR_HSV_RANGE для цветофильтра, 0 - бимодальный
+        :param color_inx: индекс COLOR_HSV_RANGE
         :return: выходное изображение / False
         """
         try:
-            if color_inx == self.COLOR_BI:
+            if color_inx == self.COLOR_ALL:
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                 _, thresh = cv2.threshold(image, 0, 255, cv2.THRESH_OTSU)
             else:
@@ -565,7 +555,7 @@ class Robot:
         image_zero = numpy.zeros_like(image)
         image_zero = cv2.cvtColor(image_zero, cv2.COLOR_BGR2RGB)
         cv2.drawContours(image_zero, contours_of_squares, -1, (255, 255, 255), -1)
-        dilate_contours = self.get_dilate_contours_by_square_inx(image_zero, self.COLOR_BI, square_inx)
+        dilate_contours = self.get_dilate_contours_by_square_inx(image_zero, self.COLOR_ALL, square_inx)
         square_area = pow(self.SQUARE_SIZES[square_inx], 2)
         min_contour_area = square_area * 4
         dilate_contours = [cnt for cnt in dilate_contours if cv2.contourArea(cnt) > min_contour_area]
@@ -588,7 +578,7 @@ class Robot:
             return False
         for contour_of_square in contours_of_squares:
             crop_image = self.crop_image_by_contour(image, contour_of_square)
-            dilate_contours = self.get_dilate_contours_by_square_inx(crop_image, self.COLOR_BI, square_inx)
+            dilate_contours = self.get_dilate_contours_by_square_inx(crop_image, self.COLOR_ALL, square_inx)
             if len(dilate_contours) < 1:
                 continue
             dilate_contour = dilate_contours[0]
@@ -644,7 +634,7 @@ class Robot:
             return result
         for contour_of_square in reversed(contours_of_squares):
             crop_image = self.crop_image_by_contour(image, contour_of_square)
-            dilate_contours = self.get_dilate_contours_by_square_inx(crop_image, self.COLOR_BI, square_inx)
+            dilate_contours = self.get_dilate_contours_by_square_inx(crop_image, self.COLOR_ALL, square_inx)
             if (len(dilate_contours) < 1):
                 continue
             dilate_contour = dilate_contours[0]
@@ -654,7 +644,7 @@ class Robot:
             min_match_shape = min(match_shapes.items(), key=lambda x: x[1])
             if len(min_match_shape) > 0 and (min_match_shape[1] < self.MAX_MATCH_SHAPES_DIGITS):
                 digit = min_match_shape[0]
-                #  6/9 2/5 путаются на маленьких изображениях, дополнительно проверяем по краним точкам контрура
+                #  6/9 2/5 путаются на маленьких изображениях, дополнительно проверяем по краним точкам контура
                 if digit == 6 or digit == 9:
                     extreme_bottom_point = dilate_contour[dilate_contour[:, :, 1].argmax()].flatten()
                     x_points = dilate_contour[:, :, 0].flatten()
@@ -730,7 +720,7 @@ class Robot:
         :return:
         """
         moments = cv2.moments(contour)
-        return (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+        return int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"])
 
     """
     Отладка
@@ -738,11 +728,11 @@ class Robot:
 
     def demo_image(self, image, delay=500, text=''):
         if text:
-            cv2.putText(image, text, (0, int(image.shape[1] / 2)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 1)
+            cv2.putText(image, text, (100, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 3)
         cv2.imshow("Robot Demo", image)
         cv2.waitKey(delay)
 
-    def demo_contours(self, image, contours, delay=500, text='', color=(255, 255, 0)):
+    def demo_contours(self, image, contours, delay=500, text='', color=(255, 255, 255)):
         cv2.drawContours(image, contours, -1, color, 1)
         self.demo_image(image, delay, text)
 
@@ -767,6 +757,7 @@ class Robot:
             print('    color_inx: ' + str(color_area.color_inx))
             print('    neighbors: ' + str(color_area.neighbors))
             print('    select_color_weights: ' + str(color_area.select_color_weights))
-            cv2.putText(image, str(color_area_inx), color_area.click_point, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0),
-                        1)
+            cv2.circle(image, color_area.click_point, 3, (0, 255, 255), -1)
+            cv2.putText(image, str(color_area_inx), color_area.centroid, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255),
+                        3)
         self.demo_image(image, delay)
