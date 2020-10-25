@@ -635,7 +635,7 @@ class Robot:
         for contour_of_square in reversed(contours_of_squares):
             crop_image = self.crop_image_by_contour(image, contour_of_square)
             dilate_contours = self.get_dilate_contours_by_square_inx(crop_image, self.COLOR_ALL, square_inx)
-            if (len(dilate_contours) < 1):
+            if len(dilate_contours) < 1:
                 continue
             dilate_contour = dilate_contours[0]
             match_shapes = {}
@@ -644,7 +644,6 @@ class Robot:
             min_match_shape = min(match_shapes.items(), key=lambda x: x[1])
             if len(min_match_shape) > 0 and (min_match_shape[1] < self.MAX_MATCH_SHAPES_DIGITS):
                 digit = min_match_shape[0]
-                #  6/9 2/5 путаются на маленьких изображениях, дополнительно проверяем по краним точкам контура
                 if digit == 6 or digit == 9:
                     extreme_bottom_point = dilate_contour[dilate_contour[:, :, 1].argmax()].flatten()
                     x_points = dilate_contour[:, :, 0].flatten()

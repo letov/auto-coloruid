@@ -63,6 +63,12 @@ class MyTestCase(unittest.TestCase):
         self.assertIsNot(button_win, False)
 
     def test_scan_digits(self):
+        image = self.tests_data['SELECT_LEVEL']
+        image = self.robot.crop_image_by_rectangle(image, numpy.array(self.robot.SELECT_LEVEL_AREA))
+        red_digits = self.robot.scan_digits(image, self.robot.COLOR_RED, self.robot.SQUARE_BIG_SYMBOL)
+        self.assertEqual(len(red_digits), self.robot.SELECT_LEVEL_COUNT - 1)
+        for digit in range(0, len(red_digits)):
+            self.assertEqual(digit + 2, red_digits[digit][0])
         image = self.tests_data['STATE_GAME_SELECT_AREA']
         image = self.robot.crop_image_by_points(image, (292, 19), (357, 52))
         red_digits = self.robot.scan_digits(image, self.robot.COLOR_RED, self.robot.SQUARE_SMALL_SYMBOL)
