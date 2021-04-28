@@ -1,5 +1,6 @@
 # auto-coloruid - python bot for coloruid-2
-https://www.miniclip.com/games/coloruid-2/
+game - https://www.miniclip.com/games/coloruid-2/
+https://habr.com/ru/post/525380/
 ## requirements
 * Python 3.8 
 * FireFox geckodriver https://github.com/mozilla/geckodriver/releases
